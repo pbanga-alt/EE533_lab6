@@ -29,52 +29,6 @@
 ///////////////////////////////////////////////////////////////////////////////
 
 
-module full_adder_1bit (
-    input   a,
-    input   b,
-    input   cin,
-    output  sum,
-    output  cout
-);
-
-assign sum  =  a ^ b ^ cin;
-assign cout =  (a & b) | (b & cin) | (a & cin);
-
-endmodule
-
-module ripple_carry_adder_32bit (
-    input  [31:0]   a,
-    input  [31:0]   b,
-    input           cin,        // 0 for ADD, 1 for SUB (two's complement)
-    output [31:0]   sum,
-    output          cout,       // Carry out of MSB  (C flag)
-    output          v_flag      // Signed overflow   (V flag)
-);
-
-wire [32:0]  carry;             // carry[0] = cin, carry[32] = cout
-
-assign carry[0] = cin;
-
-// Instantiate 32 full adders
-genvar i;
-generate
-    for (i = 0; i < 32; i = i + 1) begin : adder_chain
-        full_adder_1bit fa (
-            .a   (a[i]),
-            .b   (b[i]),
-            .cin (carry[i]),
-            .sum (sum[i]),
-            .cout(carry[i+1])
-        );
-    end
-endgenerate
-
-assign cout   =  carry[32];                 // Carry out of bit 31
-assign v_flag =  carry[32] ^ carry[31];     // Overflow: cin to MSB XOR cout of MSB
-
-endmodule
-
-
 module alu_32bit (
     input  [31:0]   a,                  // Operand A
     input  [31:0]   b,                  // Operand B (also carries shift amount in b[4:0])
@@ -103,23 +57,15 @@ localparam  ALU_LSR  =  4'b0111;
 // For SUB: invert B and set carry-in to 1 (two's complement negation)
 //-----------------------------------------------------------------------------
 
-wire          adder_cin;
-wire [31:0]   adder_b_in;
-wire [31:0]   adder_sum;
-wire          adder_cout;
-wire          adder_v;
+// Adder/Subtractor using Xilinx fast carry primitives
+wire [31:0]  adder_b_in  =  (alu_ctrl == ALU_SUB) ? ~b : b;
+wire         adder_cin   =  (alu_ctrl == ALU_SUB) ? 1'b1 : 1'b0;
 
-assign adder_cin   =  (alu_ctrl == ALU_SUB) ? 1'b1 : 1'b0;
-assign adder_b_in  =  (alu_ctrl == ALU_SUB) ? ~b   : b;
+wire [32:0]  adder_result = {1'b0, a} + {1'b0, adder_b_in} + adder_cin;
 
-ripple_carry_adder_32bit rca (
-    .a     (a),
-    .b     (adder_b_in),
-    .cin   (adder_cin),
-    .sum   (adder_sum),
-    .cout  (adder_cout),
-    .v_flag(adder_v)
-);
+wire [31:0]  adder_sum   =  adder_result[31:0];
+wire         adder_cout  =  adder_result[32];
+wire 		 adder_v 	 = (a[31] == adder_b_in[31]) && (adder_sum[31] != a[31]);
 
 
 // Bitwise Logic Unit
@@ -132,9 +78,11 @@ wire [31:0]   xnor_result = ~(a ^   b);
 
 // Shift amount = b[4:0] (5 bits for 0-31 shift on 32-bit operand)
 
-wire [4:0]    shift_amt   =  b[4:0];
-wire [31:0]   lsl_result  =  a << shift_amt;
-wire [31:0]   lsr_result  =  a >> shift_amt;
+// wire [4:0]    shift_amt   =  b[4:0];
+// Shift operations - fixed shift by 1 position only
+wire [31:0]   lsl_result  =  {a[30:0], 1'b0};   // shift left by 1
+wire [31:0]   lsr_result  =  {1'b0, a[31:1]};   // shift right by 1							//adjusted for timing issues.
+
 reg  [31:0]   alu_result;
 reg           carry_out;
 reg           overflow_out;
