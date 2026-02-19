@@ -1,0 +1,168 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<nf:module xmlns:nf="http://www.NetFPGA.org/NF2_register_system" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.NetFPGA.org/NF2_register_system NF2_register_system.xsd ">
+	<nf:name>ids</nf:name>
+	<nf:prefix>ids</nf:prefix>
+	<nf:location>udp</nf:location>
+	<nf:description>Registers for Skeleton Pipelined DPU</nf:description>
+	<nf:blocksize>256</nf:blocksize>
+	<nf:registers>
+
+		<!-- SOFTWARE REGISTERS (5 total) -->
+		<!-- Order {la_read_addr, mem_din_debug[63:32], mem_din_debug[31:0], mem_addr_debug, command_reg} -->
+
+		<nf:register>
+			<nf:name>command_reg</nf:name>
+			<nf:description>Command register - bit[0]=cpu_run_enable, bit[1]=imem_we_debug, bit[2]=dmem_web_debug, bit[3]=debug_mode_select, bit[4]=la_arm, bit[5]=la_reset</nf:description>
+			<nf:type>generic_software32</nf:type>
+		</nf:register>
+		
+		<nf:register>
+			<nf:name>mem_addr_debug</nf:name>
+			<nf:description>Shared debug address: IMEM uses [8:0] (0-511), DMEM port B uses [7:0] (0-255), regfile uses [2:0] (0-7)</nf:description>
+			<nf:type>generic_software32</nf:type>
+		</nf:register>
+		
+		<nf:register>
+			<nf:name>mem_din_debug_lsb</nf:name>
+			<nf:description>memory data input lsb</nf:description>
+			<nf:type>generic_software32</nf:type>
+		</nf:register>
+		
+		<nf:register>
+			<nf:name>mem_din_debug_msb</nf:name>
+			<nf:description>memory data input msb</nf:description>
+			<nf:type>generic_software32</nf:type>
+		</nf:register>
+
+		<nf:register>
+			<nf:name>la_read_addr</nf:name>
+			<nf:description>Logic Analyzer read port</nf:description>
+			<nf:type>generic_software32</nf:type>
+		</nf:register>
+		
+
+
+		<!-- HARDWARE REGISTERS (16 total) -->
+		<!-- Order: {ctrl_status_7, ctrl_status_6, ctrl_status_5, ctrl_status_4, ctrl_status_3, ctrl_status_2, ctrl_status_1, ctrl_status_0, -->
+		<!-- writeback_data[31:0], alu_out[31:0], la_status_32b, id_r2_data[31:0], id_r1_data[31:0], mem_dout[31:0], dmem_doutb[31:0], imem_dout} -->
+
+
+		<nf:register>
+			<nf:name>imem_dout</nf:name>
+			<nf:description>Instruction memory data output</nf:description>
+			<nf:type>generic_hardware32</nf:type>
+		</nf:register>
+		
+		<nf:register>
+			<nf:name>dmem_doutb_lsb</nf:name>
+			<nf:description>data memory output lsb portb</nf:description>
+			<nf:type>generic_hardware32</nf:type>
+		</nf:register>
+
+
+		<nf:register>
+			<nf:name>mem_dout</nf:name>
+			<nf:description>data memory output lsb porta</nf:description>
+			<nf:type>generic_hardware32</nf:type>
+		</nf:register>
+		
+		<nf:register>
+			<nf:name>id_r1_data_lsb</nf:name>
+			<nf:description>register 1 data output lsb</nf:description>
+			<nf:type>generic_hardware32</nf:type>
+		</nf:register>
+
+		<nf:register>
+			<nf:name>id_r2_data_lsb</nf:name>
+			<nf:description>register 2 data output lsb</nf:description>
+			<nf:type>generic_hardware32</nf:type>
+		</nf:register>
+
+		<nf:register>
+    		<nf:name>dpu_status</nf:name>
+    		<nf:description>dpu status info - [24:16] -pc | [7] - stall_reg | [2:0] - LA Status - 000=IDLE, 001=ARMED, 010=CAPTURING, 100=DONE</nf:description>
+    		<nf:type>generic_hardware32</nf:type>
+		</nf:register>
+
+		<nf:register>
+    		<nf:name>alu_out</nf:name>
+    		<nf:description>alu output lsb</nf:description>
+    		<nf:type>generic_hardware32</nf:type>
+		</nf:register>
+
+		<nf:register>
+    		<nf:name>wb_writeback_data</nf:name>
+    		<nf:description>Writeback data_lsb</nf:description>
+    		<nf:type>generic_hardware32</nf:type>
+		</nf:register>
+
+		<nf:register>
+    		<nf:name>ctrl_status_0</nf:name>
+    		<nf:description>ctrl_status_0</nf:description>
+    		<nf:type>generic_hardware32</nf:type>
+		</nf:register>
+
+		<nf:register>
+   			<nf:name>ctrl_status_1</nf:name>
+    		<nf:description>ctrl_status_1</nf:description>
+    		<nf:type>generic_hardware32</nf:type>
+		</nf:register>
+
+		<nf:register>
+    		<nf:name>ctrl_status_2</nf:name>
+    		<nf:description>ctrl_status_2</nf:description>
+    		<nf:type>generic_hardware32</nf:type>
+		</nf:register>
+
+		<nf:register>
+    		<nf:name>ctrl_status_3</nf:name>
+    		<nf:description>ctrl_status_3</nf:description>
+    		<nf:type>generic_hardware32</nf:type>
+		</nf:register>
+
+		<nf:register>
+    		<nf:name>ctrl_status_4</nf:name>
+    		<nf:description>ctrl_status_4</nf:description>
+    		<nf:type>generic_hardware32</nf:type>
+		</nf:register>
+
+		<nf:register>
+    		<nf:name>ctrl_status_5</nf:name>
+    		<nf:description>ctrl_status_5]</nf:description>
+   		 <nf:type>generic_hardware32</nf:type>
+		</nf:register>
+
+		<nf:register>
+    		<nf:name>ctrl_status_6</nf:name>
+    		<nf:description>ctrl_status_6</nf:description>
+    		<nf:type>generic_hardware32</nf:type>
+		</nf:register>
+
+		<nf:register>
+    		<nf:name>ctrl_status_7</nf:name>
+    		<nf:description>ctrl_status_7</nf:description>
+   		 <nf:type>generic_hardware32</nf:type>
+		</nf:register>
+		
+	</nf:registers>
+</nf:module>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,15 @@
+/root/netfpga/projects/dpu_v1/synth/nf2_top.ngc 1771450131
+/root/netfpga/projects/dpu_v1/synth/srl_cam_unencoded_32x32.ngc 1392408693
+/root/netfpga/projects/dpu_v1/synth/bram_cam_unencoded_32x32.ngc 1392408612
+/root/netfpga/projects/dpu_v1/synth/syncfifo_512x72.ngc 1392409073
+/root/netfpga/projects/dpu_v1/synth/imem_32x512_v1.ngc 1771322929
+/root/netfpga/projects/dpu_v1/synth/dmem_64x256_v1.ngc 1771322929
+/root/netfpga/projects/dpu_v1/synth/la_64x256b.ngc 1771322927
+/root/netfpga/projects/dpu_v1/synth/cdq_tx_fifo_256x72_to_36.ngc 1392408366
+/root/netfpga/projects/dpu_v1/synth/cdq_rx_fifo_512x36_to_72.ngc 1392408281
+/root/netfpga/projects/dpu_v1/synth/txfifo_512x72_to_9.ngc 1392408420
+/root/netfpga/projects/dpu_v1/synth/rxfifo_8kx9_to_72.ngc 1392408470
+/root/netfpga/projects/dpu_v1/synth/rxlengthfifo_128x13.ngc 1392408389
+/root/netfpga/projects/dpu_v1/synth/pci2net_16x60.ngc 1392408858
+/root/netfpga/projects/dpu_v1/synth/net2pci_16x32.ngc 1392408827
+OK
