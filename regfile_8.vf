@@ -93,21 +93,21 @@ endmodule
 module regfile_8(clk, 
                  clr, 
                  raddr1, 
-                 radd0, 
+                 raddr0, 
                  waddr, 
                  wdata, 
                  wea, 
-                 raddr0, 
+                 rdata0, 
                  rdata1);
 
     input clk;
     input clr;
     input [2:0] raddr1;
-    input [2:0] radd0;
+    input [2:0] raddr0;
     input [2:0] waddr;
     input [63:0] wdata;
     input wea;
-   output [63:0] raddr0;
+   output [63:0] rdata0;
    output [63:0] rdata1;
    
    wire [63:0] XLXN_1;
@@ -175,10 +175,10 @@ module regfile_8(clk,
                              .I5(XLXN_6[63:0]), 
                              .I6(XLXN_7[63:0]), 
                              .I7(XLXN_8[63:0]), 
-                             .S0(radd0[0]), 
-                             .S1(radd0[1]), 
-                             .S2(radd0[2]), 
-                             .O(raddr0[63:0]));
+                             .S0(raddr0[0]), 
+                             .S1(raddr0[1]), 
+                             .S2(raddr0[2]), 
+                             .O(rdata0[63:0]));
    mux8to1_64bitwide XLXI_10 (.I0(XLXN_1[63:0]), 
                               .I1(XLXN_2[63:0]), 
                               .I2(XLXN_3[63:0]), 
