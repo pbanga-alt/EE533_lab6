@@ -143,7 +143,11 @@
     		<nf:description>ctrl_status_7</nf:description>
    		 <nf:type>generic_hardware32</nf:type>
 		</nf:register>
-		
+				<nf:register>
+    		<nf:name>alu_flags</nf:name>
+    		<nf:description>alu_flags</nf:description>
+   		 <nf:type>generic_hardware32</nf:type>
+		</nf:register>
 	</nf:registers>
 </nf:module>
 

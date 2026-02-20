@@ -177,7 +177,11 @@ reg [63:0]     memwb_mem_dout_reg;                  // wb_alu_data_reg not done
 wire [63:0]    wb_writeback_data;
                
 assign wb_writeback_data      =     memwb_m2r_reg? memwb_mem_dout_reg   :   memwb_alu_dout_reg;
+//PP COMMIT -BEGIN
+wire[31:0] alu_flags ;
 
+assign alu_flags = {28'b0, carry_flag, overflow_flag, zero_flag, negative_flag};
+//PP COMMIT -END
 //--------------------------------------------------------------------------------------------------------------------------------------------------------------------//
 
 
@@ -467,7 +471,7 @@ end
                            }),
 
       // --- HW regs interface
-      .hardware_regs    ({
+      .hardware_regs    ({ alu_flags,
                            ctrl_status_7,              // HW REG 15 - Pipeline health + flags
                            ctrl_status_6,              // HW REG 14 - MEM/WB control
                            ctrl_status_5,              // HW REG 13 - EX/MEM data
