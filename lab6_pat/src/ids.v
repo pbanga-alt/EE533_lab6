@@ -84,15 +84,18 @@ reg [8:0]      pc_reg;                                                      // T
 
 // IF stage wires
 wire [31:0]    imem_dout;                                            
-wire [8:0]     imem_addr, if_pc_plus_1;
+wire [8:0]     imem_addr; //, if_pc_plus_1;
+wire [8:0]     pc_next;
 
-assign         if_pc_plus_1   =  pc_reg + 1;
+//assign         if_pc_plus_1   =  pc_reg + 1;
 assign         imem_addr = debug? mem_addr_debug[8:0] : pc_reg;             //debug mux
+assign         pc_next = (ex_jump) ? idex_offset_reg : ((ex_branch_taken) ? ex_alu_dout[8:0] : pc_reg+1);  // Determine next pc
 
 //--------------------------------------------------------------------------------------------------------------------------------------------------------------------//
 // IF-ID Stage
 reg [31:0]     ifid_instruc_reg;
-reg [8:0]      ifid_pc_plus_1_reg;                                          // carrying the pc+1 to compute the branch address in ex                                             
+//reg [8:0]      ifid_pc_plus_1_reg;                                          // carrying the pc+1 to compute the branch address in ex
+reg [8:0]     ifid_pc_reg;                                             
 
 
 // ID Stage wires
@@ -116,7 +119,8 @@ assign id_reg1_addr     =  debug? mem_addr_debug[2:0] : id_r1;             //deb
 
 // ID-EX Stage Register
 reg [63:0]     idex_r2_data_reg, idex_r1_data_reg;                                                       
-reg [8:0]      idex_pc_plus_1_reg, idex_offset_reg;
+reg [8:0]      idex_offset_reg; //idex_pc_plus_1_reg,
+reg [8:0]      idex_pc_reg;
 reg [3:0]      idex_passcond_reg, idex_alu_op_reg;                                   //check its width
 reg [2:0]      idex_r3_reg;  
 reg            idex_regwe_reg, idex_memwe_reg, idex_user_stall_reg, idex_m2r_reg, idex_noop_reg; 
@@ -129,7 +133,7 @@ wire[63:0]     ex_alu_input2, ex_alu_input1, ex_alu_dout;                //conne
 wire           ex_branch_taken, ex_pass, ex_jump;                                                                                                 
 
 
-assign ex_alu_input1             =        idex_alusrc_A_reg?      {{55{1'b0}}, idex_pc_plus_1_reg}                 :       idex_r1_data_reg;         
+assign ex_alu_input1             =        idex_alusrc_A_reg?      {{55{1'b0}}, idex_pc_reg}                        :       idex_r1_data_reg;         
 assign ex_alu_input2             =        idex_alusrc_B_reg?      {{55{idex_offset_reg[8]}}, idex_offset_reg}      :       idex_r2_data_reg;                         
 assign ex_branch_taken           =        idex_branch_reg      &&    ex_pass;
 assign ex_jump                   =        idex_jump_reg;
@@ -140,7 +144,8 @@ assign ex_alu_dout[63:32]        =        32'b0;                     // remove i
 
 // Ex-Mem Stage Registers
 reg [63:0]     exmem_r2_data_reg, exmem_r1_data_reg;                                                       
-reg [8:0]      exmem_pc_plus_1_reg, exmem_offset_reg;
+reg [8:0]      exmem_offset_reg; //exmem_pc_plus_1_reg,
+reg [8:0]      exmem_pc_reg, 
 reg [3:0]      exmem_passcond_reg, exmem_alu_op_reg;                                   //check its width
 reg [2:0]      exmem_r3_reg;  
 reg            exmem_regwe_reg, exmem_memwe_reg, exmem_user_stall_reg, exmem_m2r_reg, exmem_noop_reg; 
@@ -159,6 +164,7 @@ wire [63:0]    mem_dout;
 reg [63:0]     memwb_r2_data_reg, memwb_r1_data_reg;                                                       
 reg [8:0]      memwb_pc_plus_1_reg, memwb_offset_reg;
 reg [3:0]      memwb_passcond_reg, memwb_alu_op_reg;                                   //check its width
+reg [8:0]      memwb_pc_reg,
 reg [2:0]      memwb_r3_reg;  
 reg            memwb_regwe_reg, memwb_memwe_reg, memwb_user_stall_reg, memwb_m2r_reg, memwb_noop_reg; 
 reg            memwb_alusrc_A_reg, memwb_alusrc_B_reg, memwb_branch_reg, memwb_jump_reg, memwb_update_flags_reg;
@@ -202,130 +208,6 @@ assign la_monitor_sig3     =     command_reg[7]? dmem_doutb : dmem_douta;
 assign dpu_status          =     {7'b0, pc_reg, 3'b0, pipe_en, 8'b0, 1'b0, la_status};   // status info - [24:16] - pc_reg | [12] - pipe_en | [2:0] - LA status - can add more status info in future
 
   
-//--------------------------------------------------------------------------------------------------------------------------------------------------------------------//
-/*
-///////////////////////////////////////////////////////////////////////////////
-// Control Signal Monitor - Wire Assignments
-///////////////////////////////////////////////////////////////////////////////
-
-// Control status monitor wires
-wire [31:0]  ctrl_status_0, ctrl_status_1, ctrl_status_2, ctrl_status_3;
-wire [31:0]  ctrl_status_4, ctrl_status_5, ctrl_status_6, ctrl_status_7;
-
-// HW REG 8 - IF/ID Stage
-assign ctrl_status_0 = {
-   id_trigger,                  // [31]    LA trigger
-   id_user_stall,               // [30]    User stall bit
-   ifid_instruc_reg[29],        // [29]    S bit (update flags)
-   5'b0,                        // [28:24] spare
-   id_r3,                       // [23:21] destination register
-   id_r2,                       // [20:18] source register 2
-   5'b0,                        // [17:13] spare
-   id_r1,                       // [12:10] source register 1
-   id_noop,                     // [9]     noop flag
-   id_passcond,                 // [8:5]   condition code
-   ifid_instruc_reg[4:0]        // [4:0]   opcode
-};
-
-// HW REG 9 - ID Stage Control Signals
-assign ctrl_status_1 = {
-   22'b0,                       // [31:10] spare
-   id_alusrc_B,                 // [9]     ALU src B select (I-bit)
-   id_alusrc_A,                 // [8]     ALU src A select
-   id_branch,                   // [7]     branch signal
-   id_jump,                     // [6]     jump signal
-   id_m2r,                      // [5]     memory to register
-   id_memwe,                    // [4]     data memory write enable
-   id_regwe,                    // [3]     register file write enable
-   id_noop,                     // [2]     noop flag
-   id_user_stall,               // [1]     user stall
-   id_trigger                   // [0]     LA trigger
-};
-
-// HW REG 10 - ID/EX Stage Control Signals
-assign ctrl_status_2 = {
-   22'b0,                       // [31:10] spare
-   idex_alusrc_B_reg,           // [9]     ALU src B carried to EX
-   idex_alusrc_A_reg,           // [8]     ALU src A carried to EX
-   idex_branch_reg,             // [7]     branch in EX stage
-   idex_jump_reg,               // [6]     jump in EX stage
-   idex_m2r_reg,                // [5]     load select in EX stage
-   idex_memwe_reg,              // [4]     mem write enable in EX
-   idex_regwe_reg,              // [3]     reg write enable in EX
-   idex_noop_reg,               // [2]     noop flag in EX
-   idex_user_stall_reg,         // [1]     user stall in EX
-   1'b0                    // [0]     flush signal (branch or jump)
-};
-
-// HW REG 11 - ID/EX Stage Data
-// Total: 9+3+2+9+4+4+1 = 32 bits exactly
-assign ctrl_status_3 = {
-   idex_offset_reg,             // [31:23] 9-bit sign-extended immediate
-   idex_r3_reg,                 // [22:20] destination register in EX
-   2'b0,                        // [19:18] spare
-   idex_pc_plus_1_reg,          // [17:9]  full 9-bit PC+1
-   idex_alu_op_reg,             // [8:5]   ALU control opcode
-   idex_passcond_reg,            // [4:1]   condition code in EX
-   1'b0                         // [0]     spare
-};
-
-// HW REG 12 - EX/MEM Stage Control Signals
-assign ctrl_status_4 = {
-   23'b0,                       // [31:9]  spare
-   ex_branch_taken,             // [8]     branch resolved and taken
-   ex_jump,                     // [7]     jump active
-   1'b0,                    // [6]     flush active
-   exmem_m2r_reg,               // [5]     load select in MEM
-   exmem_memwe_reg,             // [4]     mem write enable in MEM
-   exmem_regwe_reg,             // [3]     reg write enable in MEM
-   exmem_noop_reg,              // [2]     noop flag in MEM
-   exmem_user_stall_reg,        // [1]     user stall in MEM
-   ex_pass                      // [0]     pass decoder output
-};
-
-// HW REG 13 - EX/MEM Stage Data
-assign ctrl_status_5 = {
-   exmem_r3_reg,                // [31:29] destination register in MEM
-   21'b0,                       // [28:8]  spare
-   exmem_alu_dout_reg[7:0]      // [7:0]   lower 8 bits = dmem address
-};
-
-// HW REG 14 - MEM/WB Stage Control Signals
-assign ctrl_status_6 = {
-   24'b0,                       // [31:8]  spare
-   memwb_m2r_reg,               // [7]     load select in WB
-   1'b0,                        // [6]     spare
-   memwb_regwe_reg,             // [5]     reg write enable in WB
-   memwb_noop_reg,              // [4]     noop flag in WB
-   memwb_user_stall_reg,        // [3]     user stall in WB - gates pipe_en
-   memwb_r3_reg                 // [2:0]   destination register in WB
-};
-
-// HW REG 15 - Pipeline Health + Flags
-assign ctrl_status_7 = {
-   pipe_en,                     // [31]    pipeline enable
-   user_pipe_overide,           // [30]    user override
-   user_pipe_en,                // [29]    user pipeline enable
-   user_pipe_overide_pulse,     // [28]    one-shot override pulse
-   pc_reg,                      // [27:19] full 9-bit PC
-   3'b0,                        // [18:16] spare
-   3'b0,                        // [15:13] spare
-   3'b0,                        // [12:10] spare
-   ex_branch_taken,             // [9]     branch taken
-   ex_jump,                     // [8]     jump active
-   1'b0,                    // [7]     flush active
-   3'b0,                        // [6:4]   spare
-   carry_flag,                  // [3]     carry flag
-   overflow_flag,               // [2]     overflow flag
-   negative_flag,               // [1]     negative flag
-   zero_flag                    // [0]     zero flag
-};
-
-
-*/
-
-//--------------------------------------------------------------------------------------------------------------------------------------------------------------------//
-
 // Instantiate Logic Analyzer
 logic_analyzer_bram la_inst (
    .monitor_sig0(la_monitor_sig0),
@@ -425,10 +307,12 @@ always @(posedge clk) begin
    if (reset) begin         
       user_pipe_overide_prev_reg    <=          0;
       pc_reg                        <=          0;
-      ifid_pc_plus_1_reg            <=          0;
+      //ifid_pc_plus_1_reg            <=          0;
 	   ifid_instruc_reg              <=          0;
+      ifid_pc_reg                   <=          0;
 
-      idex_pc_plus_1_reg            <=          0;
+      //idex_pc_plus_1_reg            <=          0;
+      idex_pc_reg                   <=          0;
       idex_offset_reg               <=          0;
       idex_user_stall_reg           <=          0;
 	   idex_r1_data_reg              <=          0; 
@@ -451,6 +335,7 @@ always @(posedge clk) begin
       negative_flag                 <=          0;
       overflow_flag                 <=          0;
 
+      exmem_pc_reg                  <=          0;
       exmem_user_stall_reg          <=          0;
 	   exmem_r2_data_reg             <=          0;
       exmem_alu_dout_reg            <=          0;
@@ -460,7 +345,7 @@ always @(posedge clk) begin
       exmem_m2r_reg                 <=          0;
       exmem_noop_reg                <=          0;
 
-
+      memwb_pc_reg                 <=          0;
       memwb_user_stall_reg          <=          0;
 	   memwb_regwe_reg               <=          0;
       memwb_r3_reg                  <=          0;
@@ -475,19 +360,22 @@ always @(posedge clk) begin
       user_pipe_overide_prev_reg    <=          user_pipe_overide;            // these are control registers which update above the pipeline - used to enable or stall pipeline
 
       if(pipe_en) begin                                                       // this segment updates the pipeline registers
-         if(ex_jump)
-            pc_reg                  <=          idex_offset_reg;
-         else if(ex_branch_taken)
-            pc_reg                  <=          ex_alu_dout[8:0];
-         else
-            pc_reg                  <=          if_pc_plus_1;                 // Program counter update and branching logic with higher priority to jump
+         // if(ex_jump)
+         //    pc_reg                  <=          idex_offset_reg;
+         // else if(ex_branch_taken)
+         //    pc_reg                  <=          ex_alu_dout[8:0];
+         // else
+         //    pc_reg                  <=          if_pc_plus_1;                 // Program counter update and branching logic with higher priority to jump
+         pc_reg <= pc_next;
 
          
          
          ifid_instruc_reg           <=          imem_dout;                    // IF-ID stage logic updates
-         ifid_pc_plus_1_reg         <=          if_pc_plus_1;
+         //ifid_pc_plus_1_reg         <=          if_pc_plus_1;
+         ifid_pc_reg                <=          pc_reg;
 
          //idex_pc_plus_1_reg         <=          ifid_pc_plus_1_reg;
+         idex_pc_reg                <=          ifid_pc_reg;
          idex_r1_data_reg           <=          id_r1_data;
          idex_r2_data_reg           <=          id_r2_data;   
          idex_r3_reg                <=          id_r3;
@@ -512,6 +400,7 @@ always @(posedge clk) begin
             overflow_flag           <=          alu_overflow;
          end
 
+         exmem_pc_reg               <=          idex_pc_reg;
          exmem_r2_data_reg          <=          idex_r2_data_reg; //connect directly no latch
          exmem_alu_dout_reg         <=          ex_alu_dout;
          exmem_r3_reg               <=          idex_r3_reg;
@@ -521,6 +410,7 @@ always @(posedge clk) begin
          exmem_memwe_reg            <=          idex_memwe_reg        &&    ex_pass;              
          exmem_noop_reg             <=          idex_noop_reg;                            // EX-Mem stage logic updates
 
+         memwb_pc_reg              <-          exmem_pc_reg;
          memwb_m2r_reg              <=          exmem_m2r_reg;
          memwb_alu_dout_reg         <=          exmem_alu_dout_reg;
          memwb_user_stall_reg       <=          exmem_user_stall_reg;
@@ -535,7 +425,7 @@ always @(posedge clk) begin
 end
 
 
-
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------//
 
 
  generic_regs
