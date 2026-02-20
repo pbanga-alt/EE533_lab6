@@ -89,7 +89,7 @@ wire [8:0]     pc_next;
 
 //assign         if_pc_plus_1   =  pc_reg + 1;
 assign         imem_addr = debug? mem_addr_debug[8:0] : pc_reg;             //debug mux
-assign         pc_next = (ex_jump) ? idex_offset_reg : ((ex_branch_taken) ? ex_alu_dout[8:0] : pc_reg+1);  // Determine next pc
+// assign         pc_next = (ex_jump) ? idex_offset_reg : ((ex_branch_taken) ? ex_alu_dout[8:0] : pc_reg+1);  // Determine next pc
 
 //--------------------------------------------------------------------------------------------------------------------------------------------------------------------//
 // IF-ID Stage
@@ -133,7 +133,7 @@ wire[63:0]     ex_alu_input2, ex_alu_input1, ex_alu_dout;                //conne
 wire           ex_branch_taken, ex_pass, ex_jump;                                                                                                 
 
 
-assign ex_alu_input1             =        idex_alusrc_A_reg?      {{55{1'b0}}, idex_pc_reg}                        :       idex_r1_data_reg;         
+assign ex_alu_input1             =        idex_alusrc_A_reg?      ({{55{1'b0}}, idex_pc_reg} + 1'b1)                        :       idex_r1_data_reg;         
 assign ex_alu_input2             =        idex_alusrc_B_reg?      {{55{idex_offset_reg[8]}}, idex_offset_reg}      :       idex_r2_data_reg;                         
 assign ex_branch_taken           =        idex_branch_reg      &&    ex_pass;
 assign ex_jump                   =        idex_jump_reg;
@@ -145,7 +145,7 @@ assign ex_alu_dout[63:32]        =        32'b0;                     // remove i
 // Ex-Mem Stage Registers
 reg [63:0]     exmem_r2_data_reg, exmem_r1_data_reg;                                                       
 reg [8:0]      exmem_offset_reg; //exmem_pc_plus_1_reg,
-reg [8:0]      exmem_pc_reg, 
+reg [8:0]      exmem_pc_reg; 
 reg [3:0]      exmem_passcond_reg, exmem_alu_op_reg;                                   //check its width
 reg [2:0]      exmem_r3_reg;  
 reg            exmem_regwe_reg, exmem_memwe_reg, exmem_user_stall_reg, exmem_m2r_reg, exmem_noop_reg; 
@@ -164,7 +164,7 @@ wire [63:0]    mem_dout;
 reg [63:0]     memwb_r2_data_reg, memwb_r1_data_reg;                                                       
 reg [8:0]      memwb_pc_plus_1_reg, memwb_offset_reg;
 reg [3:0]      memwb_passcond_reg, memwb_alu_op_reg;                                   //check its width
-reg [8:0]      memwb_pc_reg,
+reg [8:0]      memwb_pc_reg;
 reg [2:0]      memwb_r3_reg;  
 reg            memwb_regwe_reg, memwb_memwe_reg, memwb_user_stall_reg, memwb_m2r_reg, memwb_noop_reg; 
 reg            memwb_alusrc_A_reg, memwb_alusrc_B_reg, memwb_branch_reg, memwb_jump_reg, memwb_update_flags_reg;
@@ -303,6 +303,8 @@ passdecoder uut_passdecode(
 
 //--------------------------------------------------------------------------------------------------------------------------------------------------------------------//
 
+assign         pc_next = (ex_jump) ? idex_offset_reg : ((ex_branch_taken) ? ex_alu_dout[8:0] : pc_reg+1);  // Determine next pc
+
 always @(posedge clk) begin   
    if (reset) begin         
       user_pipe_overide_prev_reg    <=          0;
@@ -410,7 +412,7 @@ always @(posedge clk) begin
          exmem_memwe_reg            <=          idex_memwe_reg        &&    ex_pass;              
          exmem_noop_reg             <=          idex_noop_reg;                            // EX-Mem stage logic updates
 
-         memwb_pc_reg              <-          exmem_pc_reg;
+         memwb_pc_reg               <=          exmem_pc_reg;
          memwb_m2r_reg              <=          exmem_m2r_reg;
          memwb_alu_dout_reg         <=          exmem_alu_dout_reg;
          memwb_user_stall_reg       <=          exmem_user_stall_reg;
