@@ -101,7 +101,6 @@ assign         pc_next = pc_in[8:0] + 1;
 // IF-ID Stage
 reg [8:0]      ifid_pc_reg;
 reg [1:0]      ifid_thread_id;
-reg [31:0]     ifid_inst;
 
 // ID Stage wires
 wire [63:0]    id_r2_data0, id_r1_data0, id_r2_data1, id_r1_data1, id_r2_data2, id_r1_data2, id_r2_data3, id_r1_data3;
@@ -493,7 +492,6 @@ always @(posedge clk) begin
 
       ifid_pc_reg                   <=          0;
       ifid_thread_id                <=          0;
-      ifid_inst                     <=          0;
 
       id_r1_data_out_latched        <=          0;
       id_r2_data_out_latched        <=          0;
@@ -563,6 +561,9 @@ always @(posedge clk) begin
    else begin       
       user_pipe_overide_prev_reg    <=          user_pipe_overide;            // these are control registers which update above the pipeline - used to enable or stall pipeline
 
+      id_r1_data_out_latched     <=          id_r1_data_out;
+      id_r2_data_out_latched     <=          id_r2_data_out;
+
       if(pipe_en) begin                                                       // this segment updates the pipeline registers
          pc_reg0 <= (thread_en == 2'd0) ? pc_next : pc_reg0;
          pc_reg1 <= (thread_en == 2'd1) ? pc_next : pc_reg1;
@@ -582,14 +583,10 @@ always @(posedge clk) begin
          
          ifid_pc_reg                <=          pc_in[8:0];
          ifid_thread_id             <=          thread_en;
-         ifid_inst                  <=          imem_dout;
-
-         id_r1_data_out_latched     <=          id_r1_data_out;
-         id_r2_data_out_latched     <=          id_r2_data_out;
 
          idex_pc_reg                <=          ifid_pc_reg;
          idex_thread_id             <=          ifid_thread_id;
-         idex_inst                  <=          ifid_inst;
+         idex_inst                  <=          imem_dout;
          idex_r1_data_reg           <=          id_r1_data_out;
          idex_r2_data_reg           <=          id_r2_data_out;
          idex_r3_reg                <=          id_r3;
@@ -608,7 +605,7 @@ always @(posedge clk) begin
          idex_update_flags_reg      <=          id_update_flags;
 
          if((!idex_noop_reg)&&(idex_update_flags_reg)) begin
-            case (exmem_thread_id)   // originally idex_thread_id but since we latch the flags for an extra signal, corresponding instr is in exmem
+            case (idex_thread_id)
                2'd0 : begin
                   carry_flag0              <=          alu_carry; 
                   zero_flag0               <=          alu_zero;                            // FLAG registers updates
