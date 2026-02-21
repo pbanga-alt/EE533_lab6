@@ -139,7 +139,7 @@ end
 
 assign alu_out  =  alu_result;
 assign n_flag   =  alu_result[31];                  // MSB of result
-assign z_flag   =  (alu_result == 32'b0) ? 1'b1 : 1'b0;   // All zeros
+assign z_flag   =  ~|alu_result;   // All zeros
 assign c_flag   =  carry_out;
 assign v_flag   =  overflow_out;
 

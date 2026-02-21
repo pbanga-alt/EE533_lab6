@@ -80,38 +80,45 @@ wire 		      la_arm, la_reset, la_trigger;
 //--------------------------------------------------------------------------------------------------------------------------------------------------------------------//
 // Pipeline Registers
 // IF Stage
-reg [8:0]      pc_reg;                                                      // The code progression is like a data path along the signal route: origin to destination. Just follow the trail to troubleshoot.
+reg [8:0]      pc_reg0;                                                      // The code progression is like a data path along the signal route: origin to destination. Just follow the trail to troubleshoot.
+reg [8:0]      pc_reg1;
+reg [8:0]      pc_reg2;
+reg [8:0]      pc_reg3;
+reg [1:0]      thread_en;
+reg [10:0]     pc_in;
 
 // IF stage wires
 wire [31:0]    imem_dout;                                            
-wire [8:0]     imem_addr; //, if_pc_plus_1;
+wire [10:0]    imem_addr; //, if_pc_plus_1;  // FIX INCREASE FOR 2048 IMEM
 wire [8:0]     pc_next;
+wire [31:0]    if_imem_dout_B;
 
-//assign         if_pc_plus_1   =  pc_reg + 1;
-assign         imem_addr = debug? mem_addr_debug[8:0] : pc_reg;             //debug mux
+assign         imem_addr = debug? mem_addr_debug[10:0] : pc_in;             //debug mux
+assign         pc_next = pc_in[8:0] + 1;
 // assign         pc_next = (ex_jump) ? idex_offset_reg : ((ex_branch_taken) ? ex_alu_dout[8:0] : pc_reg+1);  // Determine next pc
 
 //--------------------------------------------------------------------------------------------------------------------------------------------------------------------//
 // IF-ID Stage
-reg [31:0]     ifid_instruc_reg;
-//reg [8:0]      ifid_pc_plus_1_reg;                                          // carrying the pc+1 to compute the branch address in ex
-reg [8:0]     ifid_pc_reg;                                             
-
+reg [8:0]      ifid_pc_reg;
+reg [1:0]      ifid_thread_id;
+reg [31:0]     ifid_inst;
 
 // ID Stage wires
-wire [63:0]    id_r2_data, id_r1_data;
+wire [63:0]    id_r2_data0, id_r1_data0, id_r2_data1, id_r1_data1, id_r2_data2, id_r1_data2, id_r2_data3, id_r1_data3;
+reg  [63:0]    id_r1_data_out, id_r2_data_out;
 wire [8:0]     id_offset;
 wire [3:0]     id_alu_op, id_passcond;                                       // Have to confirm the ALU opcode width with redesign
-wire [2:0]     id_r1, id_r2, id_r3, id_reg1_addr;                            //Connected with register module 
+wire [2:0]     id_r1, id_r2, id_r3, id_reg1_addr;                            // Connected to register file
 wire           id_regwe, id_memwe, id_user_stall, id_m2r, id_trigger;                         // Control Signals
 wire           id_alusrc_A, id_alusrc_B, id_branch, id_jump, id_noop, id_update_flags;
+reg  [63:0]    id_r1_data_out_latched, id_r2_data_out_latched; 
 
-assign id_r1            =     ifid_instruc_reg[12:10];
-assign id_r2            =     ifid_instruc_reg[15:13];
-assign id_r3            =     ifid_instruc_reg[18:16];                      // no reg_dst signal in the design as we use dedicated bits for destination register
-assign id_offset        =     ifid_instruc_reg[27:19];                      // 9 bit offset used for both branch, jump and immediate instructions
-assign id_user_stall    =     ifid_instruc_reg[30];
-assign id_trigger       =     ifid_instruc_reg[31];
+assign id_r1            =     imem_dout[12:10];
+assign id_r2            =     imem_dout[15:13];
+assign id_r3            =     imem_dout[18:16];                      // no reg_dst signal in the design as we use dedicated bits for destination register
+assign id_offset        =     imem_dout[27:19];                      // 9 bit offset used for both branch, jump and immediate instructions
+assign id_user_stall    =     imem_dout[30];
+assign id_trigger       =     imem_dout[31];
 
 assign id_reg1_addr     =  debug? mem_addr_debug[2:0] : id_r1;             //debug mux
 
@@ -121,14 +128,20 @@ assign id_reg1_addr     =  debug? mem_addr_debug[2:0] : id_r1;             //deb
 reg [63:0]     idex_r2_data_reg, idex_r1_data_reg;                                                       
 reg [8:0]      idex_offset_reg; //idex_pc_plus_1_reg,
 reg [8:0]      idex_pc_reg;
+reg [1:0]      idex_thread_id;
+reg [31:0]     idex_inst;
 reg [3:0]      idex_passcond_reg, idex_alu_op_reg;                                   //check its width
 reg [2:0]      idex_r3_reg;  
 reg            idex_regwe_reg, idex_memwe_reg, idex_user_stall_reg, idex_m2r_reg, idex_noop_reg; 
 reg            idex_alusrc_A_reg, idex_alusrc_B_reg, idex_branch_reg, idex_jump_reg, idex_update_flags_reg;
 
 // Ex stage wires and Flags
-reg            carry_flag, zero_flag, negative_flag, overflow_flag;                                      // FLAG Registers
-wire           alu_carry, alu_zero, alu_negative, alu_overflow;                                          // output of alu feeding into FLAG registers
+reg            carry_flag0, zero_flag0, negative_flag0, overflow_flag0;                                  // FLAG Registers
+reg            carry_flag1, zero_flag1, negative_flag1, overflow_flag1; 
+reg            carry_flag2, zero_flag2, negative_flag2, overflow_flag2;
+reg            carry_flag3, zero_flag3, negative_flag3, overflow_flag3;
+reg            carry_flag_in, zero_flag_in, negative_flag_in, overflow_flag_in;                          // Input to pass decoder
+wire           alu_carry, alu_zero, alu_negative, alu_overflow;
 wire[63:0]     ex_alu_input2, ex_alu_input1, ex_alu_dout;                //connect with ALU and pass decoder
 wire           ex_branch_taken, ex_pass, ex_jump;                                                                                                 
 
@@ -145,7 +158,9 @@ assign ex_alu_dout[63:32]        =        32'b0;                     // remove i
 // Ex-Mem Stage Registers
 reg [63:0]     exmem_r2_data_reg, exmem_r1_data_reg;                                                       
 reg [8:0]      exmem_offset_reg; //exmem_pc_plus_1_reg,
-reg [8:0]      exmem_pc_reg; 
+reg [8:0]      exmem_pc_reg;
+reg [1:0]      exmem_thread_id;
+reg [31:0]     exmem_inst;
 reg [3:0]      exmem_passcond_reg, exmem_alu_op_reg;                                   //check its width
 reg [2:0]      exmem_r3_reg;  
 reg            exmem_regwe_reg, exmem_memwe_reg, exmem_user_stall_reg, exmem_m2r_reg, exmem_noop_reg; 
@@ -165,6 +180,8 @@ reg [63:0]     memwb_r2_data_reg, memwb_r1_data_reg;
 reg [8:0]      memwb_pc_plus_1_reg, memwb_offset_reg;
 reg [3:0]      memwb_passcond_reg, memwb_alu_op_reg;                                   //check its width
 reg [8:0]      memwb_pc_reg;
+reg [1:0]      memwb_thread_id;
+reg [31:0]     memwb_inst;
 reg [2:0]      memwb_r3_reg;  
 reg            memwb_regwe_reg, memwb_memwe_reg, memwb_user_stall_reg, memwb_m2r_reg, memwb_noop_reg; 
 reg            memwb_alusrc_A_reg, memwb_alusrc_B_reg, memwb_branch_reg, memwb_jump_reg, memwb_update_flags_reg;
@@ -180,7 +197,7 @@ assign wb_writeback_data      =     memwb_m2r_reg? memwb_mem_dout_reg   :   memw
 //PP COMMIT -BEGIN
 wire[31:0] alu_flags ;
 
-assign alu_flags = {28'b0, carry_flag, overflow_flag, zero_flag, negative_flag};
+assign alu_flags = {16'b0, carry_flag3, overflow_flag3, zero_flag3, negative_flag3, carry_flag2, overflow_flag2, zero_flag2, negative_flag2, carry_flag1, overflow_flag1, zero_flag1, negative_flag1, carry_flag0, overflow_flag0, zero_flag0, negative_flag0};
 //PP COMMIT -END
 //--------------------------------------------------------------------------------------------------------------------------------------------------------------------//
 
@@ -201,6 +218,16 @@ assign la_arm                       =        command_reg[4];                    
 assign la_reset                     =        command_reg[5] | reset;                   // command_reg=0x20 to reset LA
 assign la_trigger                   =        id_trigger;                         // instruction[31] bit is one hot coded for LA trigger
 
+// IDK connected to REG int
+wire [31:0] ctrl_status_0 = 32'b0;
+wire [31:0] ctrl_status_1 = 32'b0;
+wire [31:0] ctrl_status_2 = 32'b0;
+wire [31:0] ctrl_status_3 = 32'b0;
+wire [31:0] ctrl_status_4 = 32'b0;
+wire [31:0] ctrl_status_5 = 32'b0;
+wire [31:0] ctrl_status_6 = 32'b0;
+wire [31:0] ctrl_status_7 = 32'b0;
+
 /*                                                                      // Connect the wires to monitor when required
 // LA monitor signals 
 assign la_monitor_sig0     =     {mem_dout, imem_we, 25'b0, mem_addr[5:0]};                          
@@ -209,7 +236,7 @@ assign la_monitor_sig2     =     command_reg[7]? dmem_dinb : dmem_dina;
 assign la_monitor_sig3     =     command_reg[7]? dmem_doutb : dmem_douta; 
 */      
                           
-assign dpu_status          =     {7'b0, pc_reg, 3'b0, pipe_en, 8'b0, 1'b0, la_status};   // status info - [24:16] - pc_reg | [12] - pipe_en | [2:0] - LA status - can add more status info in future
+assign dpu_status          =     {7'b0, pc_in[8:0], 3'b0, pipe_en, 8'b0, 1'b0, la_status};   // status info - [24:16] - pc_reg | [12] - pipe_en | [2:0] - LA status - can add more status info in future
 
   
 // Instantiate Logic Analyzer
@@ -228,18 +255,31 @@ logic_analyzer_bram la_inst (
 );
 
 // Instantiate the Instruction Memory
-	imem_32x512_v1 uut_imem (
-		.clk(clk), 
-		.din(mem_din_debug[31:0]),    	//controlled by debug
-		.addr(imem_addr),        	      //muxed for debug
-		.we(imem_we_debug),      	      //controlled by debug
-		.dout(imem_dout)         	      //tapped by debug
-	);
+	// imem_32x512_v1 uut_imem (
+	// 	.clk(clk), 
+	// 	.din(mem_din_debug[31:0]),    	//controlled by debug
+	// 	.addr(imem_addr),        	      //muxed for debug
+	// 	.we(imem_we_debug),      	      //controlled by debug
+	// 	.dout(imem_dout)         	      //tapped by debug
+	// );
+
+imem_multithread uut_imem_multithread(
+	.addra(imem_addr),
+	.addrb(ex_alu_dout[10:0]),
+	.clka(clk),
+	.clkb(clk),
+	.dina(mem_din_debug[31:0]),
+	.dinb(32'b0),
+	.douta(imem_dout),
+	.doutb(if_imem_dout_B),
+	.wea(imem_we_debug),
+	.web(1'b0)
+);
 
 
 // Instantiation of instruction decoder
 decoder_dpu_v1 uut_decoder(
-.instr(ifid_instruc_reg),
+.instr(imem_dout),
 .alusrc_A(id_alusrc_A),
 .alusrc_B(id_alusrc_B),
 .aluctrl(id_alu_op),
@@ -254,16 +294,52 @@ decoder_dpu_v1 uut_decoder(
 );
 
 
-regfile_64bit register_file (
+regfile_8 register_file0 (
     .clk(clk),
     .clr(reset),
     .raddr0(id_reg1_addr),             // muxed for debug
     .raddr1(id_r2),
     .waddr(memwb_r3_reg),
     .wdata(wb_writeback_data),
-    .wea(memwb_regwe_reg),
-    .rdata0(id_r1_data),
-    .rdata1(id_r2_data)
+    .wea(memwb_regwe_reg && (memwb_thread_id == 2'd0)),
+    .rdata0(id_r1_data0),
+    .rdata1(id_r2_data0)
+);
+
+regfile_8 register_file1 (
+    .clk(clk),
+    .clr(reset),
+    .raddr0(id_reg1_addr),             // muxed for debug
+    .raddr1(id_r2),
+    .waddr(memwb_r3_reg),
+    .wdata(wb_writeback_data),
+    .wea(memwb_regwe_reg && (memwb_thread_id == 2'd1)),
+    .rdata0(id_r1_data1),
+    .rdata1(id_r2_data1)
+);
+
+regfile_8 register_file2 (
+    .clk(clk),
+    .clr(reset),
+    .raddr0(id_reg1_addr),             // muxed for debug
+    .raddr1(id_r2),
+    .waddr(memwb_r3_reg),
+    .wdata(wb_writeback_data),
+    .wea(memwb_regwe_reg && (memwb_thread_id == 2'd2)),
+    .rdata0(id_r1_data2),
+    .rdata1(id_r2_data2)
+);
+
+regfile_8 register_file3 (
+    .clk(clk),
+    .clr(reset),
+    .raddr0(id_reg1_addr),             // muxed for debug
+    .raddr1(id_r2),
+    .waddr(memwb_r3_reg),
+    .wdata(wb_writeback_data),
+    .wea(memwb_regwe_reg && (memwb_thread_id == 2'd3)),
+    .rdata0(id_r1_data3),
+    .rdata1(id_r2_data3)
 );
 
 
@@ -283,10 +359,10 @@ alu_32bit alu_uut(
 // Instantiating passdecoder 
 passdecoder uut_passdecode(
    .compbits(idex_passcond_reg),
-   .N(negative_flag),
-   .Z(zero_flag),
-   .V(overflow_flag),
-   .C(carry_flag),
+   .N(negative_flag_in),
+   .Z(zero_flag_in),
+   .V(overflow_flag_in),
+   .C(carry_flag_in),
    .pass(ex_pass)
 );
 
@@ -307,18 +383,124 @@ passdecoder uut_passdecode(
 
 //--------------------------------------------------------------------------------------------------------------------------------------------------------------------//
 
-assign         pc_next = (ex_jump) ? idex_offset_reg : ((ex_branch_taken) ? ex_alu_dout[8:0] : pc_reg+1);  // Determine next pc
+// Multithreading PC selection logic
+always @(*) begin
+   case (thread_en)
+      2'd0 : pc_in = {{2'b00}, pc_reg0};
+      2'd1 : pc_in = {{2'b01}, pc_reg1};
+      2'd2 : pc_in = {{2'b10}, pc_reg2};
+      2'd3 : pc_in = {{2'b11}, pc_reg3};
+      default : pc_in = {{2'b00}, pc_reg0};
+   endcase
+end
+
+// Regfile rs1 and rs2 data output selection logic
+always @(*) begin
+   if (!debug) begin
+      case (ifid_thread_id)
+         2'd0 : begin
+            id_r1_data_out = id_r1_data0;
+            id_r2_data_out = id_r2_data0;
+         end
+         2'd1 : begin
+            id_r1_data_out = id_r1_data1;
+            id_r2_data_out = id_r2_data1;
+         end
+         2'd2 : begin
+            id_r1_data_out = id_r1_data2;
+            id_r2_data_out = id_r2_data2;
+         end
+         2'd3 : begin
+            id_r1_data_out = id_r1_data3;
+            id_r2_data_out = id_r2_data3;
+         end
+         default : begin
+            id_r1_data_out = id_r1_data0;
+            id_r2_data_out = id_r2_data0;
+         end
+      endcase
+   end else begin
+      case (mem_addr_debug[4:3])
+         2'd0 : begin
+            id_r1_data_out = id_r1_data0;
+            id_r2_data_out = id_r2_data0;
+         end
+         2'd1 : begin
+            id_r1_data_out = id_r1_data1;
+            id_r2_data_out = id_r2_data1;
+         end
+         2'd2 : begin
+            id_r1_data_out =  id_r1_data2;
+            id_r2_data_out = id_r2_data2;
+         end
+         2'd3 : begin
+            id_r1_data_out = id_r1_data3;
+            id_r2_data_out = id_r2_data3;
+         end
+         default : begin
+            id_r1_data_out = id_r1_data0;
+            id_r2_data_out = id_r2_data0;
+         end
+      endcase
+   end
+end
+
+// Passdecoder input selection logic
+always @(*) begin
+   case (idex_thread_id)
+      2'd0 : begin
+         carry_flag_in = carry_flag0;
+         zero_flag_in = zero_flag0;
+         negative_flag_in = negative_flag0;
+         overflow_flag_in = overflow_flag0;
+      end
+      2'd1 : begin
+         carry_flag_in = carry_flag1;
+         zero_flag_in = zero_flag1;
+         negative_flag_in = negative_flag1;
+         overflow_flag_in = overflow_flag1;
+      end
+      2'd2 : begin
+         carry_flag_in = carry_flag2;
+         zero_flag_in = zero_flag2;
+         negative_flag_in = negative_flag2;
+         overflow_flag_in = overflow_flag2;
+      end
+      2'd3 : begin
+         carry_flag_in = carry_flag3;
+         zero_flag_in = zero_flag3;
+         negative_flag_in = negative_flag3;
+         overflow_flag_in = overflow_flag3;
+      end
+      default : begin
+         carry_flag_in = carry_flag0;
+         zero_flag_in = zero_flag0;
+         negative_flag_in = negative_flag0;
+         overflow_flag_in = overflow_flag0;
+      end
+   endcase
+end
+
 
 always @(posedge clk) begin   
    if (reset) begin         
       user_pipe_overide_prev_reg    <=          0;
-      pc_reg                        <=          0;
-      //ifid_pc_plus_1_reg            <=          0;
-	   ifid_instruc_reg              <=          0;
-      ifid_pc_reg                   <=          0;
+      pc_reg0                       <=          0;
+      pc_reg1                       <=          0;
+      pc_reg2                       <=          0;
+      pc_reg3                       <=          0;
+      thread_en                     <=          0;
 
-      //idex_pc_plus_1_reg            <=          0;
+      ifid_pc_reg                   <=          0;
+      ifid_thread_id                <=          0;
+      ifid_inst                     <=          0;
+
+      id_r1_data_out_latched        <=          0;
+      id_r2_data_out_latched        <=          0;
+
       idex_pc_reg                   <=          0;
+      idex_thread_id                <=          0;
+      idex_inst                     <=          0;
       idex_offset_reg               <=          0;
       idex_user_stall_reg           <=          0;
 	   idex_r1_data_reg              <=          0; 
@@ -336,12 +518,26 @@ always @(posedge clk) begin
       idex_noop_reg                 <=          0;
       idex_update_flags_reg         <=          0;
 
-      carry_flag                    <=          0; 
-      zero_flag                     <=          0;
-      negative_flag                 <=          0;
-      overflow_flag                 <=          0;
+      carry_flag0                    <=          0; 
+      zero_flag0                     <=          0;
+      negative_flag0                 <=          0;
+      overflow_flag0                 <=          0;
+      carry_flag1                    <=          0; 
+      zero_flag1                     <=          0;
+      negative_flag1                 <=          0;
+      overflow_flag1                 <=          0;
+      carry_flag2                    <=          0; 
+      zero_flag2                     <=          0;
+      negative_flag2                 <=          0;
+      overflow_flag2                 <=          0;
+      carry_flag3                    <=          0; 
+      zero_flag3                     <=          0;
+      negative_flag3                 <=          0;
+      overflow_flag3                 <=          0;
 
       exmem_pc_reg                  <=          0;
+      exmem_thread_id               <=          0;
+      exmem_inst                    <=          0;
       exmem_user_stall_reg          <=          0;
 	   exmem_r2_data_reg             <=          0;
       exmem_alu_dout_reg            <=          0;
@@ -351,7 +547,9 @@ always @(posedge clk) begin
       exmem_m2r_reg                 <=          0;
       exmem_noop_reg                <=          0;
 
-      memwb_pc_reg                 <=          0;
+      memwb_pc_reg                  <=          0;
+      memwb_thread_id               <=          0;
+      memwb_inst                    <=          0;
       memwb_user_stall_reg          <=          0;
 	   memwb_regwe_reg               <=          0;
       memwb_r3_reg                  <=          0;
@@ -366,24 +564,34 @@ always @(posedge clk) begin
       user_pipe_overide_prev_reg    <=          user_pipe_overide;            // these are control registers which update above the pipeline - used to enable or stall pipeline
 
       if(pipe_en) begin                                                       // this segment updates the pipeline registers
-         // if(ex_jump)
-         //    pc_reg                  <=          idex_offset_reg;
-         // else if(ex_branch_taken)
-         //    pc_reg                  <=          ex_alu_dout[8:0];
-         // else
-         //    pc_reg                  <=          if_pc_plus_1;                 // Program counter update and branching logic with higher priority to jump
-         pc_reg <= pc_next;
+         pc_reg0 <= (thread_en == 2'd0) ? pc_next : pc_reg0;
+         pc_reg1 <= (thread_en == 2'd1) ? pc_next : pc_reg1;
+         pc_reg2 <= (thread_en == 2'd2) ? pc_next : pc_reg2;
+         pc_reg3 <= (thread_en == 2'd3) ? pc_next : pc_reg3;
+         thread_en <= (thread_en == 2'd3) ? 2'd0 : thread_en + 1;
 
+         // Branch logic
+         if (ex_jump || ex_branch_taken) begin
+            case (idex_thread_id)
+               2'd0 : pc_reg0 <= (ex_jump) ? idex_offset_reg : ex_alu_dout[8:0]; // if not jump, then must be branch
+               2'd1 : pc_reg1 <= (ex_jump) ? idex_offset_reg : ex_alu_dout[8:0];
+               2'd2 : pc_reg2 <= (ex_jump) ? idex_offset_reg : ex_alu_dout[8:0];
+               2'd3 : pc_reg3 <= (ex_jump) ? idex_offset_reg : ex_alu_dout[8:0];
+            endcase
+         end
          
-         
-         ifid_instruc_reg           <=          imem_dout;                    // IF-ID stage logic updates
-         //ifid_pc_plus_1_reg         <=          if_pc_plus_1;
-         ifid_pc_reg                <=          pc_reg;
+         ifid_pc_reg                <=          pc_in[8:0];
+         ifid_thread_id             <=          thread_en;
+         ifid_inst                  <=          imem_dout;
 
-         //idex_pc_plus_1_reg         <=          ifid_pc_plus_1_reg;
+         id_r1_data_out_latched     <=          id_r1_data_out;
+         id_r2_data_out_latched     <=          id_r2_data_out;
+
          idex_pc_reg                <=          ifid_pc_reg;
-         idex_r1_data_reg           <=          id_r1_data;
-         idex_r2_data_reg           <=          id_r2_data;   
+         idex_thread_id             <=          ifid_thread_id;
+         idex_inst                  <=          ifid_inst;
+         idex_r1_data_reg           <=          id_r1_data_out;
+         idex_r2_data_reg           <=          id_r2_data_out;
          idex_r3_reg                <=          id_r3;
          idex_offset_reg            <=          id_offset;                    // ID-EX stage logic updates
          idex_m2r_reg               <=          id_m2r;
@@ -400,13 +608,37 @@ always @(posedge clk) begin
          idex_update_flags_reg      <=          id_update_flags;
 
          if((!idex_noop_reg)&&(idex_update_flags_reg)) begin
-            carry_flag              <=          alu_carry; 
-            zero_flag               <=          alu_zero;                            // FLAG registers updates
-            negative_flag           <=          alu_negative;
-            overflow_flag           <=          alu_overflow;
+            case (exmem_thread_id)   // originally idex_thread_id but since we latch the flags for an extra signal, corresponding instr is in exmem
+               2'd0 : begin
+                  carry_flag0              <=          alu_carry; 
+                  zero_flag0               <=          alu_zero;                            // FLAG registers updates
+                  negative_flag0           <=          alu_negative;
+                  overflow_flag0           <=          alu_overflow;
+               end
+               2'd1 : begin
+                  carry_flag1              <=          alu_carry; 
+                  zero_flag1               <=          alu_zero;                            // FLAG registers updates
+                  negative_flag1           <=          alu_negative;
+                  overflow_flag1           <=          alu_overflow;
+               end
+               2'd2 : begin
+                  carry_flag2              <=          alu_carry; 
+                  zero_flag2               <=          alu_zero;                            // FLAG registers updates
+                  negative_flag2           <=          alu_negative;
+                  overflow_flag2           <=          alu_overflow;
+               end
+               2'd3 : begin
+                  carry_flag3              <=          alu_carry; 
+                  zero_flag3               <=          alu_zero;                            // FLAG registers updates
+                  negative_flag3           <=          alu_negative;
+                  overflow_flag3           <=          alu_overflow;
+               end
+            endcase
          end
 
          exmem_pc_reg               <=          idex_pc_reg;
+         exmem_thread_id            <=          idex_thread_id;
+         exmem_inst                 <=          idex_inst;
          exmem_r2_data_reg          <=          idex_r2_data_reg; //connect directly no latch
          exmem_alu_dout_reg         <=          ex_alu_dout;
          exmem_r3_reg               <=          idex_r3_reg;
@@ -417,6 +649,8 @@ always @(posedge clk) begin
          exmem_noop_reg             <=          idex_noop_reg;                            // EX-Mem stage logic updates
 
          memwb_pc_reg               <=          exmem_pc_reg;
+         memwb_thread_id            <=          exmem_thread_id;
+         memwb_inst                 <=          exmem_inst;
          memwb_m2r_reg              <=          exmem_m2r_reg;
          memwb_alu_dout_reg         <=          exmem_alu_dout_reg;
          memwb_user_stall_reg       <=          exmem_user_stall_reg;
@@ -483,8 +717,8 @@ end
                            wb_writeback_data[31:0],    // HW REG  7 - WB writeback data
                            ex_alu_dout[31:0],          // HW REG  6 - EX ALU output
                            dpu_status,                 // HW REG  5 - status info - [24:16] - pc_reg | [12] - pipe_en | [2:0] - LA status - can add more status info in future
-                           id_r2_data[31:0],           // HW REG  4 - ID stage R2 data
-                           id_r1_data[31:0],           // HW REG  3 - ID stage R1 data
+                           id_r2_data_out_latched[31:0],           // HW REG  4 - ID stage R2 data
+                           id_r1_data_out_latched[31:0],           // HW REG  3 - ID stage R1 data
                            mem_dout[31:0],             // HW REG  2 - MEM stage data out
                            dmem_doutb[31:0],           // HW REG  1 - DMEM debug port B
                            imem_dout                   // HW REG  0 - IF stage instruction
