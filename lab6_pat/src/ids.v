@@ -565,21 +565,59 @@ always @(posedge clk) begin
       id_r2_data_out_latched     <=          id_r2_data_out;
 
       if(pipe_en) begin                                                       // this segment updates the pipeline registers
-         pc_reg0 <= (thread_en == 2'd0) ? pc_next : pc_reg0;
-         pc_reg1 <= (thread_en == 2'd1) ? pc_next : pc_reg1;
-         pc_reg2 <= (thread_en == 2'd2) ? pc_next : pc_reg2;
-         pc_reg3 <= (thread_en == 2'd3) ? pc_next : pc_reg3;
+         // pc_reg0 <= (thread_en == 2'd0) ? pc_next : pc_reg0;
+         // pc_reg1 <= (thread_en == 2'd1) ? pc_next : pc_reg1;
+         // pc_reg2 <= (thread_en == 2'd2) ? pc_next : pc_reg2;
+         // pc_reg3 <= (thread_en == 2'd3) ? pc_next : pc_reg3;
+         // thread_en <= (thread_en == 2'd3) ? 2'd0 : thread_en + 1;
+
+         if (thread_en == 2'd0 || ((ex_jump || ex_branch_taken) && (idex_thread_id == 2'd0))) begin
+            if (ex_jump) begin
+               pc_reg0 <= idex_offset_reg;
+            end else if (ex_branch_taken) begin
+               pc_reg0 <= ex_alu_dout[8:0];
+            end else begin
+               pc_reg0 <= pc_next;
+            end
+         end
+         if (thread_en == 2'd1 || ((ex_jump || ex_branch_taken) && (idex_thread_id == 2'd1))) begin
+            if (ex_jump) begin
+               pc_reg1 <= idex_offset_reg;
+            end else if (ex_branch_taken) begin
+               pc_reg1 <= ex_alu_dout[8:0];
+            end else begin
+               pc_reg1 <= pc_next;
+            end
+         end
+         if (thread_en == 2'd2 || ((ex_jump || ex_branch_taken) && (idex_thread_id == 2'd2))) begin
+            if (ex_jump) begin
+               pc_reg2 <= idex_offset_reg;
+            end else if (ex_branch_taken) begin
+               pc_reg2 <= ex_alu_dout[8:0];
+            end else begin
+               pc_reg2 <= pc_next;
+            end
+         end
+         if (thread_en == 2'd3 || ((ex_jump || ex_branch_taken) && (idex_thread_id == 2'd3))) begin
+            if (ex_jump) begin
+               pc_reg3 <= idex_offset_reg;
+            end else if (ex_branch_taken) begin
+               pc_reg3 <= ex_alu_dout[8:0];
+            end else begin
+               pc_reg3 <= pc_next;
+            end
+         end
          thread_en <= (thread_en == 2'd3) ? 2'd0 : thread_en + 1;
 
          // Branch logic
-         if (ex_jump || ex_branch_taken) begin
-            case (idex_thread_id)
-               2'd0 : pc_reg0 <= (ex_jump) ? idex_offset_reg : ex_alu_dout[8:0]; // if not jump, then must be branch
-               2'd1 : pc_reg1 <= (ex_jump) ? idex_offset_reg : ex_alu_dout[8:0];
-               2'd2 : pc_reg2 <= (ex_jump) ? idex_offset_reg : ex_alu_dout[8:0];
-               2'd3 : pc_reg3 <= (ex_jump) ? idex_offset_reg : ex_alu_dout[8:0];
-            endcase
-         end
+         // if (ex_jump || ex_branch_taken) begin
+         //    case (idex_thread_id)
+         //       2'd0 : pc_reg0 <= (ex_jump) ? idex_offset_reg : ex_alu_dout[8:0]; // if not jump, then must be branch
+         //       2'd1 : pc_reg1 <= (ex_jump) ? idex_offset_reg : ex_alu_dout[8:0];
+         //       2'd2 : pc_reg2 <= (ex_jump) ? idex_offset_reg : ex_alu_dout[8:0];
+         //       2'd3 : pc_reg3 <= (ex_jump) ? idex_offset_reg : ex_alu_dout[8:0];
+         //    endcase
+         // end
          
          ifid_pc_reg                <=          pc_in[8:0];
          ifid_thread_id             <=          thread_en;
